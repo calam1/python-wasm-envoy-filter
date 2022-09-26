@@ -1,0 +1,42 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: new-filter
+  namespace: demo
+spec:
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: envoy.filters.network.http_connection_manager
+            subFilter:
+              name: envoy.filters.http.router
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: new-filter
+        typed_config:
+          '@type': type.googleapis.com/udpa.type.v1.TypedStruct
+          type_url: type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+          value:
+            config:
+              # 'configuration' available at root_context.getConfiguration()
+              configuration:
+                '@type': type.googleapis.com/google.protobuf.StringValue
+                value: my-config
+              # root_id MUST match registerRootContext() 2nd param
+              root_id: add_header
+              vm_config:
+                code:
+                  local:
+                    filename: /var/local/wasm/new-filter.wasm
+                runtime: envoy.wasm.runtime.v8
+                allow_precompiled: true
+                vm_id: my-example
+              name: envoy.filters.http.wasm
+  workloadSelector:
+    labels:
+      app: python-wasm
